@@ -13,7 +13,7 @@ struct dtaFile dtaFiles[12] =
     {"a5.dta",0x4f4bb0c6, 0xea340420},
     {"a7.dta",0xf4f03a72, 0xe266fe62},
     {"a9.dta",0x959d1117, 0x5b763446},
-    {"ab.dta",0x7f3d9b74, 0xec48fe17},
+    {"ab.dta",0x7f3d9b74, 0xec48fe17}
 };
 
 BOOL check_signature(struct file *sFile)
@@ -58,6 +58,7 @@ void HeaderInfo(struct file *sFile, struct dtaFile *Infodta)
     printf("OffsetTable : %X\n", HeaderDecy.OffsetTable);
     printf("SizeTable : %X\n", HeaderDecy.SizeTable);
     printf("Unknow0C : %X\n", HeaderDecy.Unknow0C);
+    exit(0);
     TableInfo(sFile, &HeaderDecy, Infodta);
 }
 
@@ -155,7 +156,7 @@ struct dtaFile* GetInfodtaFile(LPCTSTR lpFileName)
 {
     DWORD i;
 
-    for (i = 0; i < sizeof (dtaFiles); i++)
+    for (i = 0; i < sizeof (dtaFiles) / sizeof (struct dtaFile); i++)
     {
         if (!strcmpi(dtaFiles[i].name, lpFileName))
             return &dtaFiles[i];
