@@ -39,7 +39,7 @@ void clean_file(struct file *sFile)
 {
     CloseHandle(sFile->hFile);
     CloseHandle(sFile->hMap);
-    CloseHandle(sFile->bMap);
+    UnmapViewOfFile(sFile->bMap);
 }
 
 BOOL save_buf(LPCTSTR lpFileName, PBYTE bBuf, DWORD dwSizeBuf)

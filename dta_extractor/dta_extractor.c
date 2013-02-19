@@ -74,15 +74,21 @@ BOOL check_signature(struct file *sFile)
 void Decypher(DWORD *Buffer, DWORD SizeBuffer, DWORD dwKey1, DWORD dwKey2)
 {
     DWORD i;
+    unsigned int key[2] = {dwKey1, dwKey2};
+    unsigned char *pkey = (unsigned char*)key;
+    unsigned char *pBuf;
 
+    pBuf = (unsigned char*)Buffer;
 	for (i = 0; i < SizeBuffer / 4; i += 2)
 	{
 		Buffer[i] = ~(~Buffer[i] ^ dwKey1);
 		Buffer[i + 1] = ~(~Buffer[i + 1] ^ dwKey2);
+		pBuf += 8;
 	}
 	for (i = 0; i < SizeBuffer % 8; i++)
 	{
-        printf("REMAINING TO FIX\n");
+	    *pBuf = ~(~(*pBuf) ^ *pkey++);
+	    pBuf++;
 	}
 }
 
@@ -103,13 +109,67 @@ void HeaderInfo(struct file *sFile, struct dtaFile *Infodta)
     TableInfo(sFile, &HeaderDecy, Infodta);
 }
 
-void TableEntryInfo(struct TableEntry *entry)
+void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *Infodta, DWORD dwOffset)
 {
-    BYTE Name[17] = {0};
+    BYTE *name;
+    DWORD dwNameLength;
+    BYTE *savefile = NULL;
+    BYTE *spbuf = NULL;
+    BYTE lulz[0x8000];
+    DWORD i;
 
     printf("Unknow00 : %X\n", entry->Unknow00);
     printf("Unknow04 : %X\n", entry->Unknow04);
     printf("Unknow08 : %X\n", entry->Unknow08);
+    printf("Unknow0C : %X\n", entry->Unknow0C);
+    printf("FileSize : %X\n", entry->FileSize);
+    printf("Unknow14 : %X\n", entry->Unknow14);
+    printf("NameLength : %X\n", entry->NameLength & 0x7FFF);
+    printf("Unknow1C : %X\n", entry->Unknow1C);
+
+    dwNameLength = entry->NameLength & 0x7FFF;
+    name = VirtualAlloc(NULL, sizeof (char) * (dwNameLength + 1), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!name)
+        return;
+    memcpy(name, sFile->bMap + dwOffset + 0x20, dwNameLength);
+    Decypher(name, dwNameLength, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+    name[dwNameLength] = 0;
+    printf("Name = %s\n", name);
+
+    savefile = VirtualAlloc(NULL, sizeof (char) * entry->FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!savefile)
+        return;
+
+    /* SRSLY !? */
+    spbuf = savefile;
+    for (i = 0; i < entry->FileSize / 0x8000; i++)
+    {
+        memcpy(lulz, sFile->bMap + dwOffset + 0x20 + dwNameLength + 4 + i * 0x8005, 0x8001);
+        Decypher(lulz, 0x8001, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        memcpy(savefile, lulz + 1, 0x8000);
+        savefile += 0x8000;
+    }
+    if (entry->FileSize % 0x8000)
+    {
+        memcpy(lulz, sFile->bMap + dwOffset + 0x20 + dwNameLength + 4 + (entry->FileSize / 0x8000) * 0x8005, (entry->FileSize % 0x8000) + 1);
+        Decypher(lulz, (entry->FileSize % 0x8000) + 1, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        memcpy(savefile, lulz + 1, entry->FileSize % 0x8000);
+    }
+    if (strrchr(name, '\\'))
+    {
+        save_buf(strrchr(name, '\\') + 1, spbuf, entry->FileSize);
+    }
+    VirtualFree(name, 0, MEM_RELEASE);
+    VirtualFree(savefile, 0, MEM_RELEASE);
+}
+
+void TableEntryInfo(struct TableEntry *entry)
+{
+    BYTE Name[17] = {0};
+
+    printf("TotalSum : %X\n", entry->TotalSum);
+    printf("OffsetStart : %X\n", entry->OffsetStart);
+    printf("OffsetEnd : %X\n", entry->OffsetEnd);
     // Some entry don't finish with \x00
     strncpy(Name, entry->Name, 16);
     printf("Name : %s\n", Name);
@@ -117,19 +177,26 @@ void TableEntryInfo(struct TableEntry *entry)
 
 void TableInfo(struct file *sFile, struct dtaHeader *header, struct dtaFile *Infodta)
 {
-    BYTE *Table = NULL;
+    struct TableEntry *Table = NULL;
+    struct FileEntry fentry;
+    DWORD i;
 
     printf("NB ENTRY = %X\n", header->SizeTable / sizeof (struct TableEntry));
-    Table = malloc(sizeof (char) * header->SizeTable);
+    Table = VirtualAlloc(NULL, sizeof (char) * header->SizeTable, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!Table)
         return;
     memcpy(Table, sFile->bMap + header->OffsetTable, header->SizeTable);
     Decypher(Table, header->SizeTable, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     hex_dump(Table, header->SizeTable);
-    TableEntryInfo(Table);
-    TableEntryInfo(Table + sizeof (struct TableEntry));
-    TableEntryInfo(Table + sizeof (struct TableEntry) * 2);
-    TableEntryInfo(Table + sizeof (struct TableEntry) * 3);
+
+    for (i = 0; i < header->SizeTable / sizeof (struct TableEntry); i++)
+    {
+        TableEntryInfo(&Table[i]);
+        memcpy(&fentry, sFile->bMap + Table[i].OffsetStart, sizeof (struct FileEntry));
+        Decypher(&fentry, sizeof (struct FileEntry), Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        FileEntryInfo(sFile, &fentry, Infodta, Table[i].OffsetStart);
+    }
+    VirtualFree(Table, 0, MEM_RELEASE);
 }
 
 struct dtaFile* GetInfodtaFile(LPCTSTR lpFileName)
