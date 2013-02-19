@@ -1,6 +1,6 @@
 #include "dta_extractor.h"
 
-struct dtaFile dtaFiles[12] =
+struct dtaFile dtaFiles[13] =
 {
     {"a2.dta", 0x1417d340, 0xb6399e19},
     {"a6.dta",0x728e2db9, 0x5055da68},
@@ -13,7 +13,8 @@ struct dtaFile dtaFiles[12] =
     {"a5.dta",0x4f4bb0c6, 0xea340420},
     {"a7.dta",0xf4f03a72, 0xe266fe62},
     {"a9.dta",0x959d1117, 0x5b763446},
-    {"ab.dta",0x7f3d9b74, 0xec48fe17}
+    {"ab.dta",0x7f3d9b74, 0xec48fe17},
+    {"test.dta",0xd4ad90c6, 0x67da216e}
 };
 
 BOOL check_signature(struct file *sFile)
@@ -58,7 +59,6 @@ void HeaderInfo(struct file *sFile, struct dtaFile *Infodta)
     printf("OffsetTable : %X\n", HeaderDecy.OffsetTable);
     printf("SizeTable : %X\n", HeaderDecy.SizeTable);
     printf("Unknow0C : %X\n", HeaderDecy.Unknow0C);
-    exit(0);
     TableInfo(sFile, &HeaderDecy, Infodta);
 }
 
@@ -88,7 +88,7 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
     Decypher(name, dwNameLength, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     name[dwNameLength] = 0;
     printf("Name = %s\n", name);
-
+    exit(0);
     savefile = VirtualAlloc(NULL, sizeof (char) * entry->FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!savefile)
         return;
@@ -140,8 +140,7 @@ void TableInfo(struct file *sFile, struct dtaHeader *header, struct dtaFile *Inf
         return;
     memcpy(Table, sFile->bMap + header->OffsetTable, header->SizeTable);
     Decypher(Table, header->SizeTable, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
-    hex_dump(Table, header->SizeTable);
-
+    //hex_dump(Table, header->SizeTable);
     for (i = 0; i < header->SizeTable / sizeof (struct TableEntry); i++)
     {
         TableEntryInfo(&Table[i]);
