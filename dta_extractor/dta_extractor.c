@@ -88,7 +88,6 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
     Decypher(name, dwNameLength, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     name[dwNameLength] = 0;
     printf("Name = %s\n", name);
-    exit(0);
     savefile = VirtualAlloc(NULL, sizeof (char) * entry->FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!savefile)
         return;
