@@ -1,6 +1,6 @@
 #include "dta_extractor.h"
 
-struct dtaFile dtaFiles[13] =
+struct dtaFile dtaFiles[12] =
 {
     {"a2.dta", 0x1417d340, 0xb6399e19},
     {"a6.dta",0x728e2db9, 0x5055da68},
@@ -14,30 +14,37 @@ struct dtaFile dtaFiles[13] =
     {"a7.dta",0xf4f03a72, 0xe266fe62},
     {"a9.dta",0x959d1117, 0x5b763446},
     {"ab.dta",0x7f3d9b74, 0xec48fe17},
-    {"test.dta",0xd4ad90c6, 0x67da216e}
 };
 
-BOOL check_signature(struct file *sFile)
+int check_signature(struct file *sFile)
 {
-    if (*(DWORD*)sFile->bMap == 0x30445349) // 'ISD0'
-        return TRUE;
-    return FALSE;
+    if (*(unsigned int*)sFile->bMap == 0x30445349) // 'ISD0'
+        return 1;
+    return 0;
 }
 
-void Decypher(DWORD *Buffer, DWORD SizeBuffer, DWORD dwKey1, DWORD dwKey2)
+void Decypher(unsigned int *Buffer, int SizeBuffer, unsigned int dwKey1, unsigned int dwKey2)
 {
-    DWORD i;
+    int i;
     unsigned int key[2] = {dwKey1, dwKey2};
     unsigned char *pkey = (unsigned char*)key;
     unsigned char *pBuf;
 
     pBuf = (unsigned char*)Buffer;
-    for (i = 0; i < SizeBuffer / 4; i += 2)
+    for (i = 0; i < SizeBuffer / 8; i++)
+    {
+	*Buffer = ~(~*Buffer ^ dwKey1);
+	Buffer++;
+	*Buffer = ~(~*Buffer ^ dwKey2);
+	Buffer++;
+	pBuf += 8;
+    }
+    /*for (i = 0; i < SizeBuffer / 8; i += 2)
     {
         Buffer[i] = ~(~Buffer[i] ^ dwKey1);
         Buffer[i + 1] = ~(~Buffer[i + 1] ^ dwKey2);
         pBuf += 8;
-    }
+    }*/
     for (i = 0; i < SizeBuffer % 8; i++)
     {
         *pBuf = ~(~(*pBuf) ^ *pkey++);
@@ -54,7 +61,7 @@ void HeaderInfo(struct file *sFile, struct dtaFile *Infodta)
         return;
     hDTA = (struct dtaHeader*)(sFile->bMap + 4);
     memcpy(&HeaderDecy, hDTA, sizeof (struct dtaHeader));
-    Decypher((DWORD*)&HeaderDecy, 0x10, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+    Decypher((unsigned int*)&HeaderDecy, 0x10, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     printf("NbEntry : %X\n", HeaderDecy.NbEntry);
     printf("OffsetTable : %X\n", HeaderDecy.OffsetTable);
     printf("SizeTable : %X\n", HeaderDecy.SizeTable);
@@ -62,14 +69,14 @@ void HeaderInfo(struct file *sFile, struct dtaFile *Infodta)
     TableInfo(sFile, &HeaderDecy, Infodta);
 }
 
-void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *Infodta, DWORD dwOffset)
+void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *Infodta, int dwOffset)
 {
-    BYTE *name;
-    DWORD dwNameLength;
-    BYTE *savefile = NULL;
-    BYTE *spbuf = NULL;
-    BYTE lulz[0x8000];
-    DWORD i;
+    char *name;
+    unsigned int dwNameLength;
+    char *savefile = NULL;
+    char *spbuf = NULL;
+    char lulz[0x9001];
+    unsigned int i;
 
     printf("TotalSize : %X\n", entry->TotalSize);
     printf("Unknow04 : %X\n", entry->Unknow04);
@@ -81,14 +88,14 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
     printf("Unknow1C : %X\n", entry->Unknow1C);
 
     dwNameLength = entry->NameLength & 0x7FFF;
-    name = VirtualAlloc(NULL, sizeof (char) * (dwNameLength + 1), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    name = xalloc(sizeof (char) * (dwNameLength + 1));
     if (!name)
         return;
     memcpy(name, sFile->bMap + dwOffset + 0x20, dwNameLength);
-    Decypher(name, dwNameLength, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+    Decypher((unsigned int*)name, dwNameLength, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     name[dwNameLength] = 0;
     printf("Name = %s\n", name);
-    savefile = VirtualAlloc(NULL, sizeof (char) * entry->FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    savefile = xalloc(sizeof (char) * entry->FileSize);
     if (!savefile)
         return;
 
@@ -97,27 +104,27 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
     for (i = 0; i < entry->FileSize / 0x8000; i++)
     {
         memcpy(lulz, sFile->bMap + dwOffset + 0x20 + dwNameLength + 4 + i * 0x8005, 0x8001);
-        Decypher(lulz, 0x8001, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        Decypher((unsigned int*)lulz, 0x8001, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
         memcpy(savefile, lulz + 1, 0x8000);
         savefile += 0x8000;
     }
     if (entry->FileSize % 0x8000)
     {
         memcpy(lulz, sFile->bMap + dwOffset + 0x20 + dwNameLength + 4 + (entry->FileSize / 0x8000) * 0x8005, (entry->FileSize % 0x8000) + 1);
-        Decypher(lulz, (entry->FileSize % 0x8000) + 1, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        Decypher((unsigned int*)lulz, (entry->FileSize % 0x8000) + 1, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
         memcpy(savefile, lulz + 1, entry->FileSize % 0x8000);
     }
-    if (strrchr(name, '\\'))
+    /*if (strrchr(name, '\\'))
     {
         save_buf(strrchr(name, '\\') + 1, spbuf, entry->FileSize);
-    }
-    VirtualFree(name, 0, MEM_RELEASE);
-    VirtualFree(savefile, 0, MEM_RELEASE);
+    }*/
+    xfree(name);
+    xfree(spbuf);
 }
 
 void TableEntryInfo(struct TableEntry *entry)
 {
-    BYTE Name[17] = {0};
+    char Name[17] = {0};
 
     printf("TotalSum : %X\n", entry->TotalSum);
     printf("OffsetStart : %X\n", entry->OffsetStart);
@@ -131,33 +138,47 @@ void TableInfo(struct file *sFile, struct dtaHeader *header, struct dtaFile *Inf
 {
     struct TableEntry *Table = NULL;
     struct FileEntry fentry;
-    DWORD i;
+    unsigned int i;
 
     printf("NB ENTRY = %X\n", header->SizeTable / sizeof (struct TableEntry));
-    Table = VirtualAlloc(NULL, sizeof (char) * header->SizeTable, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    //Table = VirtualAlloc(NULL, sizeof (char) * header->SizeTable, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    Table = xalloc(sizeof (char) * header->SizeTable);
     if (!Table)
         return;
     memcpy(Table, sFile->bMap + header->OffsetTable, header->SizeTable);
-    Decypher(Table, header->SizeTable, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+    Decypher((unsigned int*)Table, header->SizeTable, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
     //hex_dump(Table, header->SizeTable);
     for (i = 0; i < header->SizeTable / sizeof (struct TableEntry); i++)
     {
         TableEntryInfo(&Table[i]);
         memcpy(&fentry, sFile->bMap + Table[i].OffsetStart, sizeof (struct FileEntry));
-        Decypher(&fentry, sizeof (struct FileEntry), Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
+        Decypher((unsigned int*)&fentry, sizeof (struct FileEntry), Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
         FileEntryInfo(sFile, &fentry, Infodta, Table[i].OffsetStart);
     }
-    VirtualFree(Table, 0, MEM_RELEASE);
+    xfree(Table);
+    //VirtualFree(Table, 0, MEM_RELEASE);
 }
 
-struct dtaFile* GetInfodtaFile(LPCTSTR lpFileName)
+struct dtaFile* GetInfodtaFile(char *lpFileName)
 {
-    DWORD i;
+    unsigned int i;
 
     for (i = 0; i < sizeof (dtaFiles) / sizeof (struct dtaFile); i++)
     {
+
+	#ifdef WIN32
+
         if (!strcmpi(dtaFiles[i].name, lpFileName))
             return &dtaFiles[i];
+
+	#endif
+
+	#ifdef __unix__
+
+        if (!strcasecmp(dtaFiles[i].name, lpFileName))
+            return &dtaFiles[i];
+
+	#endif
     }
     return NULL;
 }
@@ -178,16 +199,16 @@ int main(int argc, char *argv[])
         printf("Can't get info for this dta file\n");
         return 1;
     }
-    if (open_and_map(argv[1], &sFile) == FALSE)
+    if (open_and_map(argv[1], &sFile) == 0)
     {
         clean_file(&sFile);
-        printf("[-] open_and_map failed\n", 0);
+        printf("[-] open_and_map failed\n");
         return 1;
     }
-    if (check_signature(&sFile) == FALSE)
+    if (check_signature(&sFile) == 0)
     {
         clean_file(&sFile);
-        printf("[-] It's not a valid .dta file\n", 0);
+        printf("[-] It's not a valid .dta file\n");
         return 1;
     }
     HeaderInfo(&sFile, Infodta);
@@ -209,7 +230,7 @@ void hex_dump(void *data, int size)
     {
         if (n % 16 == 1)
         {
-            sprintf_s(addrstr, sizeof(addrstr), "%.4x",
+            snprintf(addrstr, sizeof(addrstr), "%.4x",
                 ((unsigned int)p-(unsigned int)data));
         }
         c = *p;
@@ -217,9 +238,9 @@ void hex_dump(void *data, int size)
         {
             c = '.';
         }
-        sprintf_s(bytestr, sizeof(bytestr), "%02X ", *p);
+        snprintf(bytestr, sizeof(bytestr), "%02X ", *p);
         strncat(hexstr, bytestr, sizeof(hexstr)-strlen(hexstr)-1);
-        sprintf_s(bytestr, sizeof(bytestr), "%c", c);
+        snprintf(bytestr, sizeof(bytestr), "%c", c);
         strncat(charstr, bytestr, sizeof(charstr)-strlen(charstr)-1);
         if (n % 16 == 0)
         {
@@ -238,4 +259,35 @@ void hex_dump(void *data, int size)
     {
         printf("[%4.4s]   %-50.50s  %s\n", addrstr, hexstr, charstr);
     }
+}
+
+void *xalloc(size_t size)
+{
+	#ifdef WIN32
+
+    	return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+	#endif
+
+	#ifdef __unix__
+
+	return malloc(size);
+
+	#endif
+	
+}
+
+void xfree(void *ptr)
+{
+	#ifdef WIN32
+
+    	VirtualFree(ptr, 0, MEM_RELEASE);
+
+	#endif
+
+	#ifdef __unix__
+
+	free(ptr);
+
+	#endif
 }
