@@ -109,6 +109,7 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
         savefile += 0x8000;
     }
     if (entry->FileSize % 0x8000)
+
     {
         memcpy(lulz, sFile->bMap + dwOffset + 0x20 + dwNameLength + 4 + (entry->FileSize / 0x8000) * 0x8005, (entry->FileSize % 0x8000) + 1);
         Decypher((unsigned int*)lulz, (entry->FileSize % 0x8000) + 1, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
