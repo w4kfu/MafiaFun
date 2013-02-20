@@ -8,34 +8,9 @@ This repository contains different toolz for having fun with the game Mafia
 
 Idapython script for extracting key required for decyphering .dta files
 
-
-### craft_dta.py
-
-Exploit a stackoverflow in rw_data.dll
-
-The vulnerability is in function called by :
-
-	003618A0 ; int __stdcall dtaOpen(LPCSTR lpFileName, char)
-	
-function sub_361B90 have an array of char on the : 
-
-	00361B90 var_208= byte ptr -208h
-	
-When they read the "real name" of the file, they don't check the size to read (or only the & 0x7FFF) :
-
-	.text:00361E3F push    0               ; lpOverlapped
-	.text:00361E41 and     edx, 7FFFh
-	.text:00361E47 push    ecx             ; lpNumberOfBytesRead
-	.text:00361E48 push    edx             ; nNumberOfBytesToRead
-	.text:00361E49 mov     edx, [esi+eax]
-	.text:00361E4C lea     ecx, [esp+2E8h+var_208]
-	.text:00361E53 push    ecx             ; lpBuffer
-	.text:00361E54 push    edx             ; hFile
-	.text:00361E55 call    ebx ; ReadFile
-	
-Watch the extractor of .dta file for understand how the file format work.
-
 ### dta_extractor
+
+Known Issues : some .dta files are not correctly handle. 
 
 Program for extracting .dta files, only work with few of them, tested on AB.dta to get all the music files (.ogg) :
 
@@ -76,3 +51,29 @@ Program for extracting .dta files, only work with few of them, tested on AB.dta 
 * SOUNDS\MUSIC\12 - Quiet Before Storm.ogg
 * SOUNDS\MUSIC\07 - Briefing - Conspiracy.ogg
 * SOUNDS\MUSIC\02 - Main Theme (short version).ogg
+
+### craft_dta.py
+
+Exploit a stackoverflow in rw_data.dll
+
+The vulnerability is in function called by :
+
+	003618A0 ; int __stdcall dtaOpen(LPCSTR lpFileName, char)
+	
+function sub_361B90 have an array of char on the : 
+
+	00361B90 var_208= byte ptr -208h
+	
+When they read the "real name" of the file, they don't check the size to read (or only the & 0x7FFF) :
+
+	.text:00361E3F push    0               ; lpOverlapped
+	.text:00361E41 and     edx, 7FFFh
+	.text:00361E47 push    ecx             ; lpNumberOfBytesRead
+	.text:00361E48 push    edx             ; nNumberOfBytesToRead
+	.text:00361E49 mov     edx, [esi+eax]
+	.text:00361E4C lea     ecx, [esp+2E8h+var_208]
+	.text:00361E53 push    ecx             ; lpBuffer
+	.text:00361E54 push    edx             ; hFile
+	.text:00361E55 call    ebx ; ReadFile
+	
+Watch the extractor of .dta file for understand how the file format work.
