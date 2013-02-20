@@ -115,10 +115,10 @@ void FileEntryInfo(struct file *sFile, struct FileEntry *entry, struct dtaFile *
         Decypher((unsigned int*)lulz, (entry->FileSize % 0x8000) + 1, Infodta->dwKey1 ^ 0x39475694, Infodta->dwKey2 ^ 0x34985762);
         memcpy(savefile, lulz + 1, entry->FileSize % 0x8000);
     }
-    /*if (strrchr(name, '\\'))
+    if (strrchr(name, '\\'))
     {
         save_buf(strrchr(name, '\\') + 1, spbuf, entry->FileSize);
-    }*/
+    }
     xfree(name);
     xfree(spbuf);
 }
@@ -231,17 +231,30 @@ void hex_dump(void *data, int size)
     {
         if (n % 16 == 1)
         {
-            snprintf(addrstr, sizeof(addrstr), "%.4x",
-                ((unsigned int)p-(unsigned int)data));
+            #ifdef __unix__
+                snprintf(addrstr, sizeof(addrstr), "%.4x",
+                    ((unsigned int)p-(unsigned int)data));
+            #else
+                sprintf_s(addrstr, sizeof(addrstr), "%.4x",
+                    ((unsigned int)p-(unsigned int)data));
+            #endif
         }
         c = *p;
         if (isalnum(c) == 0)
         {
             c = '.';
         }
+        #ifdef __unix__
         snprintf(bytestr, sizeof(bytestr), "%02X ", *p);
+        #else
+        sprintf_s(bytestr, sizeof(bytestr), "%02X ", *p);
+        #endif
         strncat(hexstr, bytestr, sizeof(hexstr)-strlen(hexstr)-1);
+        #ifdef __unix__
         snprintf(bytestr, sizeof(bytestr), "%c", c);
+        #else
+        sprintf_s(bytestr, sizeof(bytestr), "%c", c);
+        #endif
         strncat(charstr, bytestr, sizeof(charstr)-strlen(charstr)-1);
         if (n % 16 == 0)
         {
@@ -264,31 +277,18 @@ void hex_dump(void *data, int size)
 
 void *xalloc(size_t size)
 {
-	#ifdef WIN32
-
-    	return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-
-	#endif
-
 	#ifdef __unix__
-
 	return malloc(size);
-
+    #else
+    return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	#endif
-	
 }
 
 void xfree(void *ptr)
 {
-	#ifdef WIN32
-
-    	VirtualFree(ptr, 0, MEM_RELEASE);
-
-	#endif
-
 	#ifdef __unix__
-
 	free(ptr);
-
+	#else
+    VirtualFree(ptr, 0, MEM_RELEASE);
 	#endif
 }

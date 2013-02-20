@@ -8,9 +8,11 @@ int open_file(char *lpFileName, struct file *sFile)
         return 0;
     return 1;
     #endif
+    #ifdef __unix__
     sFile->hFile = open(lpFileName, O_RDONLY);
     if (sFile->hFile == -1)
-	return 0;
+        return 0;
+    #endif
     return 1;
 }
 
@@ -31,11 +33,12 @@ int mapview_file(struct file *sFile)
     if (sFile->hMap == NULL)
         return 0;
     #endif
+    #ifdef __unix__
     if ((sFile->bMap = mmap (NULL, sFile->sb.st_size, PROT_READ, MAP_PRIVATE,
 		       sFile->hFile, 0)) == MAP_FAILED)
-	return 0;
+        return 0;
+    #endif
     return 1;
-    
 }
 
 int open_and_map(char *lpFileName, struct file *sFile)
@@ -53,14 +56,17 @@ int open_and_map(char *lpFileName, struct file *sFile)
 
 void clean_file(struct file *sFile)
 {
-    /*CloseHandle(sFile->hFile);
+    #ifdef WIN32
+    CloseHandle(sFile->hFile);
     CloseHandle(sFile->hMap);
-    UnmapViewOfFile(sFile->bMap);*/
+    UnmapViewOfFile(sFile->bMap);
+    #endif
 }
 
 int save_buf(char *lpFileName, char *bBuf, int dwSizeBuf)
 {
-    /*HANDLE hFile;
+    #ifdef WIN32
+    HANDLE hFile;
     DWORD dwByteWritten;
 
     if ((hFile = CreateFileA(lpFileName,(GENERIC_READ | GENERIC_WRITE),
@@ -71,10 +77,11 @@ int save_buf(char *lpFileName, char *bBuf, int dwSizeBuf)
     if (dwByteWritten != dwSizeBuf)
     {
         CloseHandle(hFile);
-        return FALSE;
+        return 0;
     }
     CloseHandle(hFile);
-    return TRUE;*/
+    return 1;
+    #endif
 }
 
 

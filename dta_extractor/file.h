@@ -2,19 +2,7 @@
 #define __FILE_H__
 
 #include <stdio.h>
-
-#ifdef WIN32
-
-#include <windows.h>
-
-struct file
-{
-    HANDLE  hFile;
-    HANDLE  hMap;
-    PBYTE   bMap;
-};
-
-#endif
+#include <stdlib.h>
 
 #ifdef __unix__
 
@@ -30,6 +18,17 @@ struct file
 	int hMap;
 	char *bMap;
 	struct stat sb;
+};
+
+#else
+
+# include <windows.h>
+
+struct file
+{
+    HANDLE  hFile;
+    HANDLE  hMap;
+    PBYTE   bMap;
 };
 
 #endif
